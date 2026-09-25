@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { addManagedAccount, getHealth, getManagedAccounts, probeManagedAccount, removeManagedAccount, runPrompt, setManagedDefaultProfile } from "./api";
+import { addManagedAccount, getHealth, getManagedAccounts, getModelBlocklist, probeManagedAccount, removeManagedAccount, runPrompt, setManagedAccountOrder, setManagedDefaultProfile, setModelBlocked } from "./api";
 import { go, hrefFor, readRoute, type Route } from "./nav";
 import { RailNav } from "./RailNav";
 import { AccountDetailPage } from "./pages/AccountDetailPage";
@@ -7,6 +7,7 @@ import { AccountsPage } from "./pages/AccountsPage";
 import { ConnectPage } from "./pages/ConnectPage";
 import type { RecipeName } from "./recipes";
 import { HomePage, type HomeCopy } from "./pages/HomePage";
+import { ModelsPage } from "./pages/ModelsPage";
 import { PlaygroundPage } from "./pages/PlaygroundPage";
 import { QuotaPage } from "./pages/QuotaPage";
 import { BFTheme } from "./bflabs/BFTheme";
@@ -29,11 +30,13 @@ const COPY = {
     navHome: "Home",
     navStart: "Quick start",
     navAccounts: "Accounts",
+    navModels: "Models",
     navQuota: "Quota",
     navPlay: "Playground",
     navHomeMeta: "Runtime and API URLs",
     navStartMeta: "Client recipes",
     navAccountsMeta: "Persistent credentials",
+    navModelsMeta: "Catalog, parameters, block list",
     navQuotaMeta: "Cursor dashboard usage",
     navPlayMeta: "Messages / Chat / Responses",
     consoleTag: "Local console",
@@ -135,6 +138,9 @@ const COPY = {
       keyPlaceholder: "Cursor API key",
       keyHelp: "Stored by the gateway in STATE_DIR/auths with owner-only file permissions.",
       remove: "Remove",
+      orderUp: "Up",
+      orderDown: "Down",
+      orderHint: "New sessions follow this order from the top. Join time no longer decides the queue.",
     },
     detail: {
       missing: "Account not found",
@@ -164,6 +170,7 @@ const COPY = {
       fableDocs: "Docs",
       models: "Catalog",
       noModels: "Official catalog returned no models.",
+      modelPage: "Open in Models",
       cursorUsage: "https://cursor.com/dashboard",
     },
     play: {
@@ -176,6 +183,7 @@ const COPY = {
       events: "Event output",
       emptyOutput: "Send a request to inspect the protocol response.",
       waiting: "Add an account first",
+      noModels: "No listed models",
       accounts: "Go to accounts",
     },
     connect: {
@@ -192,6 +200,33 @@ const COPY = {
       workspaceBody:
         "Grok Build and Claude Code edit files with their own local tools in your project directory. This gateway only runs the model. Cursor SDK uses an empty workspace, so the model may emit that absolute path. Use a relative path or your project path.",
     },
+    models: {
+      kicker: "Official catalog",
+      title: "Models",
+      desc: "Refresh reads the selected account's Cursor catalog. Block removes that id from GET /v1/models. A request that already names the id still runs.",
+      pick: "Account",
+      refresh: "Refresh",
+      refreshing: "Refreshing",
+      listed: "Listed",
+      blocked: "Blocked",
+      block: "Block",
+      unblock: "Restore",
+      copy: "Copy config",
+      emptyAccounts: "No account",
+      accounts: "Go to accounts",
+      testing: "Testing",
+      noModels: "Official catalog returned no models.",
+      noneBlocked: "No blocked models.",
+      blockedHint: "Blocked models stay on this page. External clients no longer see them in GET /v1/models.",
+      params: "Parameters",
+      variants: "Variants",
+      defaultVariant: "Default",
+      noParams: "This model has no listed parameters.",
+      allowed: "Allowed",
+      stale: "Catalog is stale.",
+      unavailable: "Catalog is unavailable.",
+      missingFromCatalog: "Not in this account catalog",
+    },
     keyNeeded: "Paste a Cursor API key first.",
   },
   zh: {
@@ -203,11 +238,13 @@ const COPY = {
     navHome: "首页",
     navStart: "快速开始",
     navAccounts: "账号",
+    navModels: "模型",
     navQuota: "配额",
     navPlay: "协议试跑",
     navHomeMeta: "运行控制和 API 地址",
     navStartMeta: "客户端配方",
     navAccountsMeta: "持久化凭证",
+    navModelsMeta: "目录、参数、屏蔽",
     navQuotaMeta: "官方限额",
     navPlayMeta: "Messages / Chat / Responses",
     consoleTag: "本机控制台",
@@ -309,6 +346,9 @@ const COPY = {
       keyPlaceholder: "Cursor API Key",
       keyHelp: "账号由网关写入 STATE_DIR/auths，并使用仅属主可读写的文件权限。",
       remove: "移除",
+      orderUp: "上移",
+      orderDown: "下移",
+      orderHint: "新会话从最上面开始按这个顺序轮询。加入时间不再决定顺序。",
     },
     detail: {
       missing: "找不到这个账号",
@@ -338,6 +378,7 @@ const COPY = {
       fableDocs: "说明",
       models: "模型目录",
       noModels: "官方目录没有返回模型。",
+      modelPage: "在模型页打开",
       cursorUsage: "https://cursor.com/dashboard",
     },
     play: {
@@ -350,6 +391,7 @@ const COPY = {
       events: "事件输出",
       emptyOutput: "发送请求后在这里查看协议响应。",
       waiting: "先加入账号",
+      noModels: "没有可列出的模型",
       accounts: "去账号页",
     },
     connect: {
@@ -366,6 +408,33 @@ const COPY = {
       workspaceBody:
         "Grok Build / Claude Code 改文件用的是它们自己的本机工具，工作区是你的项目目录。这个网关只提供模型推理。Cursor SDK 的 cwd 是空目录，所以模型有时会吐出网关绝对路径。写相对路径或你的项目路径就能改本地文件。",
     },
+    models: {
+      kicker: "官方目录",
+      title: "模型",
+      desc: "刷新读取当前账号的 Cursor 目录。屏蔽后，该 id 不再出现在 GET /v1/models。已经写明这个 id 的请求仍会执行。",
+      pick: "账号",
+      refresh: "刷新",
+      refreshing: "刷新中",
+      listed: "列出",
+      blocked: "已屏蔽",
+      block: "屏蔽",
+      unblock: "恢复",
+      copy: "复制配置",
+      emptyAccounts: "没有账号",
+      accounts: "去账号页",
+      testing: "测试中",
+      noModels: "官方目录没有返回模型。",
+      noneBlocked: "没有屏蔽的模型。",
+      blockedHint: "被屏蔽的模型仍留在本页。外部客户端的 GET /v1/models 不再包含它们。",
+      params: "参数",
+      variants: "变体",
+      defaultVariant: "默认",
+      noParams: "这个模型没有列出参数。",
+      allowed: "允许值",
+      stale: "目录已过期。",
+      unavailable: "目录不可用。",
+      missingFromCatalog: "不在这个账号的目录里",
+    },
     keyNeeded: "先粘贴一把 Cursor Key。",
   },
 } as const;
@@ -374,9 +443,19 @@ function initialLanguage(): Language {
   return navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en";
 }
 
+const TONE_KEY = "csgw-console-tone";
+
+function initialTone(): "light" | "dark" {
+  try {
+    return window.localStorage.getItem(TONE_KEY) === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
 export function App() {
   const [language, setLanguage] = useState<Language>(initialLanguage);
-  const [tone, setTone] = useState<"light" | "dark">("light");
+  const [tone, setTone] = useState<"light" | "dark">(initialTone);
   const [route, setRoute] = useState<Route>(readRoute);
   const [health, setHealth] = useState<HealthPayload>();
   const [healthError, setHealthError] = useState("");
@@ -388,6 +467,9 @@ export function App() {
   const [activeId, setActiveId] = useState("");
   const [protocol, setProtocol] = useState<Protocol>("messages");
   const [selectedModel, setSelectedModel] = useState("");
+  const [blockedIds, setBlockedIds] = useState<string[]>([]);
+  const [blockError, setBlockError] = useState("");
+  const [blockBusy, setBlockBusy] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [prompt, setPrompt] = useState("Reply with a short status check for this gateway.");
   const [stream, setStream] = useState(true);
@@ -427,8 +509,18 @@ export function App() {
   }, [language, route.page, t]);
 
   useEffect(() => {
-    if (!selectedModel && active?.models?.data[0]?.id) setSelectedModel(active.models.data[0].id);
-  }, [active, selectedModel]);
+    try {
+      window.localStorage.setItem(TONE_KEY, tone);
+    } catch {
+      // private mode
+    }
+  }, [tone]);
+
+  useEffect(() => {
+    const visible = active?.models?.data.filter((model) => !blockedIds.includes(model.id)) ?? [];
+    if (selectedModel && visible.some((model) => model.id === selectedModel)) return;
+    setSelectedModel(visible[0]?.id ?? "");
+  }, [active, blockedIds, selectedModel]);
 
   const protocolSummary = useMemo(() => {
     if (!health) return "…";
@@ -484,8 +576,30 @@ export function App() {
     }
   };
 
+  const loadBlocklist = async () => {
+    try {
+      setBlockedIds(await getModelBlocklist());
+      setBlockError("");
+    } catch (error) {
+      setBlockError(messageOf(error));
+    }
+  };
+
+  const changeBlocked = async (id: string, blocked: boolean) => {
+    setBlockBusy(true);
+    setBlockError("");
+    try {
+      setBlockedIds(await setModelBlocked(id, blocked));
+    } catch (error) {
+      setBlockError(messageOf(error));
+    } finally {
+      setBlockBusy(false);
+    }
+  };
+
   useEffect(() => {
     void loadAccounts();
+    void loadBlocklist();
   }, []);
 
   const probe = async (id: string) => {
@@ -500,7 +614,10 @@ export function App() {
         account: nextAccount,
         testError: undefined,
       });
-      setSelectedModel((current) => current || nextModels.data[0]?.id || "");
+      setSelectedModel((current) => {
+        if (current && !blockedIds.includes(current) && nextModels.data.some((model) => model.id === current)) return current;
+        return nextModels.data.find((model) => !blockedIds.includes(model.id))?.id ?? "";
+      });
     } catch (error) {
       patchRoster(id, {
         testState: "fail",
@@ -539,6 +656,27 @@ export function App() {
       setAddError(messageOf(error));
     } finally {
       setAdding(false);
+    }
+  };
+
+  const reorderAccount = async (id: string, direction: -1 | 1) => {
+    const index = roster.findIndex((item) => item.id === id);
+    const next = index + direction;
+    if (index < 0 || next < 0 || next >= roster.length) return;
+    const previous = roster;
+    const swapped = [...roster];
+    const current = swapped[index];
+    const target = swapped[next];
+    if (!current || !target) return;
+    swapped[index] = target;
+    swapped[next] = current;
+    setRoster(swapped);
+    setAddError("");
+    try {
+      await setManagedAccountOrder(swapped.map((item) => item.id));
+    } catch (error) {
+      setRoster(previous);
+      setAddError(messageOf(error));
     }
   };
 
@@ -601,7 +739,16 @@ export function App() {
   };
 
   const healthOk = health?.status === "ok";
-  const homeCopy = t.home as unknown as HomeCopy & { add: string; adding: string; keyPlaceholder: string; keyHelp: string; remove: string };
+  const homeCopy = t.home as unknown as HomeCopy & {
+    add: string;
+    adding: string;
+    keyPlaceholder: string;
+    keyHelp: string;
+    remove: string;
+    orderUp: string;
+    orderDown: string;
+    orderHint: string;
+  };
 
   const pageLabel = pageLabelFor(route.page, t);
 
@@ -623,11 +770,13 @@ export function App() {
           home={t.navHome}
           quota={t.navQuota}
           accounts={t.navAccounts}
+          models={t.navModels}
           connect={t.navStart}
           playground={t.navPlay}
           homeMeta={t.navHomeMeta}
           quotaMeta={t.navQuotaMeta}
           accountsMeta={t.navAccountsMeta}
+          modelsMeta={t.navModelsMeta}
           startMeta={t.navStartMeta}
           playMeta={t.navPlayMeta}
           accountCount={roster.length}
@@ -635,6 +784,7 @@ export function App() {
             home: <NavIcon name="home" />,
             quota: <NavIcon name="quota" />,
             key: <NavIcon name="key" />,
+            models: <NavIcon name="models" />,
             start: <NavIcon name="start" />,
             play: <NavIcon name="play" />,
           }}
@@ -690,6 +840,7 @@ export function App() {
             onAdd={() => void addAccount()}
             onTest={(id) => void testAccount(id)}
             onRemove={(id) => void removeAccount(id)}
+            onReorder={(id, direction) => void reorderAccount(id, direction)}
           />
         ) : null}
         {route.page === "account" ? (
@@ -705,6 +856,20 @@ export function App() {
             profileError={profileError}
           />
         ) : null}
+        {route.page === "models" ? (
+          <ModelsPage
+            t={t.models}
+            roster={roster}
+            activeId={activeId}
+            blockedIds={blockedIds}
+            blockError={blockError}
+            blockBusy={blockBusy}
+            onActive={setActiveId}
+            onRefresh={(id) => void testAccount(id)}
+            onCopy={(value) => void copyValue("model", value)}
+            onBlock={(id, blocked) => void changeBlocked(id, blocked)}
+          />
+        ) : null}
         {route.page === "playground" ? (
           <PlaygroundPage
             t={t.play}
@@ -712,6 +877,7 @@ export function App() {
             activeId={activeId}
             protocol={protocol}
             selectedModel={selectedModel}
+            blockedIds={blockedIds}
             prompt={prompt}
             stream={stream}
             output={output}
@@ -741,6 +907,7 @@ function pageLabelFor(page: Route["page"], t: (typeof COPY)["en"] | (typeof COPY
   if (page === "connect") return t.navStart;
   if (page === "accounts" || page === "account") return t.navAccounts;
   if (page === "quota") return t.navQuota;
+  if (page === "models") return t.navModels;
   if (page === "playground") return t.navPlay;
   return t.navHome;
 }
@@ -749,7 +916,7 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
 }
 
-function NavIcon({ name }: { name: "home" | "quota" | "key" | "start" | "play" }) {
+function NavIcon({ name }: { name: "home" | "quota" | "key" | "models" | "start" | "play" }) {
   const d =
     name === "home"
       ? "M3 10.5 12 3l9 7.5V21H14V14H10v7H3Z"
@@ -757,6 +924,8 @@ function NavIcon({ name }: { name: "home" | "quota" | "key" | "start" | "play" }
         ? "M12 3a9 9 0 1 0 9 9h-4a5 5 0 1 1-5-5V3Zm1 1.1V11h6.9A8 8 0 0 0 13 4.1Z"
         : name === "key"
           ? "M8 14a5 5 0 1 1 4.9-6H21v3h-2v3h-3v2h-3.1A5 5 0 0 1 8 14Zm0-3a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"
+          : name === "models"
+            ? "M4 5h16v3H4Zm0 5.5h16v3H4ZM4 16h10v3H4Z"
           : name === "start"
             ? "M8 5v14l11-7Z"
             : "M4 5h10v4H8v6h6v4H4Zm12 3 5 4-5 4Z";

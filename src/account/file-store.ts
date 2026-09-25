@@ -21,6 +21,7 @@ interface AccountFile {
   api_key: string;
   added_at: number;
   default_profile?: RuntimeProfile;
+  request_order?: number;
 }
 
 export interface StoredCursorAccount {
@@ -29,6 +30,22 @@ export interface StoredCursorAccount {
   addedAt: number;
   keyHint: string;
   defaultProfile: RuntimeProfile;
+  requestOrder?: number;
+}
+
+export class AccountOrderError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AccountOrderError";
+  }
+}
+
+export function compareAccountOrder(left: StoredCursorAccount, right: StoredCursorAccount): number {
+  const leftRank = left.requestOrder ?? Number.MAX_SAFE_INTEGER;
+  const rightRank = right.requestOrder ?? Number.MAX_SAFE_INTEGER;
+  if (leftRank !== rightRank) return leftRank - rightRank;
+  if (left.addedAt !== right.addedAt) return left.addedAt - right.addedAt;
+  return left.id.localeCompare(right.id);
 }
 
 const FILE_RE = /^acct_[A-Za-z0-9-]+\.json$/;
@@ -40,6 +57,10 @@ function keyHint(value: string): string {
 
 function readStoredProfile(value: unknown): RuntimeProfile {
   return value === "sand" ? "sand" : DEFAULT_RUNTIME_PROFILE;
+}
+
+function readRequestOrder(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
 }
 
 function isAccountFile(value: unknown): value is AccountFile {
@@ -70,7 +91,7 @@ export class CursorAccountFileStore {
       const account = this.read(join(this.dir, name));
       if (account) accounts.push(this.toPublic(account));
     }
-    return accounts.sort((left, right) => left.addedAt - right.addedAt);
+    return accounts.sort(compareAccountOrder);
   }
 
   findByFingerprint(fingerprint: string): StoredCursorAccount | undefined {
@@ -88,14 +109,17 @@ export class CursorAccountFileStore {
     const apiKey = rawApiKey.trim();
     if (!apiKey) throw new Error("Cursor API key is required");
     const fingerprint = credentialFingerprint(apiKey);
-    const existing = this.list().find((account) => credentialFingerprint(account.apiKey) === fingerprint);
+    const listed = this.list();
+    const existing = listed.find((account) => credentialFingerprint(account.apiKey) === fingerprint);
     if (existing) return existing;
+    const explicit = listed.flatMap((account) => account.requestOrder === undefined ? [] : [account.requestOrder]);
     const account: AccountFile = {
       version: 1,
       id: `acct_${randomUUID()}`,
       type: "cursor",
       api_key: apiKey,
       added_at: Date.now(),
+      ...(explicit.length > 0 ? { request_order: Math.max(...explicit) + 1 } : {}),
     };
     this.write(account);
     return this.toPublic(account);
@@ -119,6 +143,20 @@ export class CursorAccountFileStore {
     const next: AccountFile = { ...account, default_profile: profile };
     this.write(next);
     return this.toPublic(next);
+  }
+
+  setOrder(ids: string[]): StoredCursorAccount[] {
+    const current = this.list();
+    const known = new Set(current.map((account) => account.id));
+    if (ids.length !== current.length || new Set(ids).size !== ids.length || ids.some((id) => !known.has(id))) {
+      throw new AccountOrderError("ids must list every account once");
+    }
+    for (const [index, id] of ids.entries()) {
+      const account = this.read(join(this.dir, `${id}.json`));
+      if (!account) throw new AccountOrderError("ids must list every account once");
+      this.write({ ...account, request_order: index });
+    }
+    return this.list();
   }
 
   dirMode(): number {
@@ -170,6 +208,7 @@ export class CursorAccountFileStore {
       addedAt: account.added_at,
       keyHint: keyHint(account.api_key),
       defaultProfile: readStoredProfile(account.default_profile),
+      requestOrder: readRequestOrder(account.request_order),
     };
   }
 }

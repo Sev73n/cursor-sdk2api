@@ -26,6 +26,24 @@ export async function probeManagedAccount(id: string): Promise<{ models: ModelsP
   });
 }
 
+export async function getModelBlocklist(): Promise<string[]> {
+  const body = await fetch("/v0/management/models/blocklist");
+  if (!body.ok) throw new Error(await errorMessage(body));
+  const parsed = (await body.json()) as { ids: string[] };
+  return parsed.ids;
+}
+
+export async function setModelBlocked(id: string, blocked: boolean): Promise<string[]> {
+  const body = await fetch("/v0/management/models/blocklist", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id, blocked }),
+  });
+  if (!body.ok) throw new Error(await errorMessage(body));
+  const parsed = (await body.json()) as { ids: string[] };
+  return parsed.ids;
+}
+
 export async function getManagedAccounts(): Promise<ManagementAccount[]> {
   const body = await managementJson<{ accounts: ManagementAccount[] }>({
     method: "GET",
@@ -53,6 +71,15 @@ export async function setManagedDefaultProfile(
     body: JSON.stringify({ id, default_profile: defaultProfile }),
   });
   return body.account;
+}
+
+export async function setManagedAccountOrder(ids: string[]): Promise<void> {
+  await managementJson<{ accounts: ManagementAccount[] }>({
+    method: "PUT",
+    path: "/order",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ids }),
+  });
 }
 
 export async function removeManagedAccount(id: string): Promise<void> {

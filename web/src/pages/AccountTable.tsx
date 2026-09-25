@@ -18,9 +18,12 @@ export function AccountTable({
   testFail,
   open,
   remove,
+  orderUp,
+  orderDown,
   headers,
   onTest,
   onRemove,
+  onReorder,
 }: {
   items: RosterItem[];
   quotaMissing: string;
@@ -34,9 +37,12 @@ export function AccountTable({
   testFail: string;
   open: string;
   remove?: string;
+  orderUp?: string;
+  orderDown?: string;
   headers: [string, string, string, string];
   onTest: (id: string) => void;
   onRemove?: (id: string) => void;
+  onReorder?: (id: string, direction: -1 | 1) => void;
 }) {
   return (
     <div className="table-wrap">
@@ -48,7 +54,7 @@ export function AccountTable({
           </tr>
         </thead>
         <tbody>
-          {items.map((item) => {
+          {items.map((item, index) => {
             const quota = formatQuota(item.account);
             const quotaBreakdown = formatQuotaBreakdown(item.account);
             const grokQuota = formatGrokBotQuota(item.account);
@@ -78,6 +84,12 @@ export function AccountTable({
                 <td>{probe}</td>
                 <td className="row-actions">
                   <div className="row-action-group">
+                    {onReorder && orderUp && orderDown ? (
+                      <>
+                        <Button variant="quiet" size="sm" disabled={index === 0} onClick={() => onReorder(item.id, -1)}>{orderUp}</Button>
+                        <Button variant="quiet" size="sm" disabled={index === items.length - 1} onClick={() => onReorder(item.id, 1)}>{orderDown}</Button>
+                      </>
+                    ) : null}
                     <Button variant="secondary" size="sm" disabled={item.testState === "testing"} onClick={() => onTest(item.id)}>
                       {item.testState === "testing" ? testing : test}
                     </Button>

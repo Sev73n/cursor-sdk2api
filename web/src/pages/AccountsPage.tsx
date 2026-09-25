@@ -14,8 +14,18 @@ export function AccountsPage({
   onAdd,
   onTest,
   onRemove,
+  onReorder,
 }: {
-  t: HomeCopy & { add: string; adding: string; keyPlaceholder: string; keyHelp: string; remove: string };
+  t: HomeCopy & {
+    add: string;
+    adding: string;
+    keyPlaceholder: string;
+    keyHelp: string;
+    remove: string;
+    orderUp: string;
+    orderDown: string;
+    orderHint: string;
+  };
   draftKey: string;
   addError: string;
   adding: boolean;
@@ -24,6 +34,7 @@ export function AccountsPage({
   onAdd: () => void;
   onTest: (id: string) => void;
   onRemove: (id: string) => void;
+  onReorder: (id: string, direction: -1 | 1) => void;
 }) {
   const passed = roster.filter((item) => item.testState === "pass").length;
   const failed = roster.filter((item) => item.testState === "fail").length;
@@ -58,6 +69,7 @@ export function AccountsPage({
       </form>
       {addError ? <p className="field-error" role="alert">{addError}</p> : null}
       <p className="note">{t.keyHelp}</p>
+      {roster.length > 1 ? <p className="note">{t.orderHint}</p> : null}
       {roster.length === 0 ? <p className="empty">{t.noAccounts}</p> : (
         <AccountTable
           items={roster}
@@ -72,9 +84,12 @@ export function AccountsPage({
           testFail={t.testFail}
           open={t.open}
           remove={t.remove}
+          orderUp={t.orderUp}
+          orderDown={t.orderDown}
           headers={t.headers}
           onTest={onTest}
           onRemove={onRemove}
+          onReorder={onReorder}
         />
       )}
     </PageFrame>

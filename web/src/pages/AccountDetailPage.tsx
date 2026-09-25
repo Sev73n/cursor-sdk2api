@@ -31,6 +31,7 @@ export function AccountDetailPage({
     fableDocs: string;
     models: string;
     noModels: string;
+    modelPage: string;
     cursorUsage: string;
     cursorQuota: string;
     grokBotQuota: string;
@@ -126,6 +127,7 @@ export function AccountDetailPage({
       ) : null}
       <p><a className="quiet-link" href={t.cursorUsage} target="_blank" rel="noreferrer">{t.quotaOpen}</a></p>
       <h2 className="subhead">{t.models}</h2>
+      <p><a className="quiet-link" href={hrefFor("models")}>{t.modelPage}</a></p>
       {!item.models ? <p className="empty">{t.testing}</p> : null}
       {item.models && item.models.data.length === 0 ? <p className="empty">{t.noModels}</p> : null}
       <ul className="model-plain">

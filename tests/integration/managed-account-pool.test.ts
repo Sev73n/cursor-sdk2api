@@ -64,6 +64,49 @@ test("one gateway key round-robins new sessions across persistent Cursor account
   expect(ctx.sdk.agents.map((agent) => agent.input.apiKey)).toEqual(["cursor-a", "cursor-b"]);
 });
 
+test("operator request order overrides join order and restarts from the top", async () => {
+  ctx = await startTestApp({
+    config: { authMode: "managed", gatewayAccessKey: "gateway-key", managedCursorKey: undefined },
+    sdk: {
+      modelsByApiKey: {
+        "cursor-a": { ok: true, models: [{ id: "composer-2.5" }] },
+        "cursor-b": { ok: true, models: [{ id: "composer-2.5" }] },
+        "cursor-c": { ok: true, models: [{ id: "composer-2.5" }] },
+      },
+    },
+  });
+  const first = await addAccount(ctx, "cursor-a");
+  const second = await addAccount(ctx, "cursor-b");
+  const ordered = await fetch(`${ctx.url}/v0/management/accounts/order`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ids: [second, first] }),
+  });
+  expect(ordered.status).toBe(200);
+  const third = await addAccount(ctx, "cursor-c");
+  const listed = await fetch(`${ctx.url}/v0/management/accounts`);
+  const body = (await listed.json()) as { accounts: Array<{ id: string; request_order: number }> };
+  expect(body.accounts.map((account) => account.id)).toEqual([second, first, third]);
+  expect(body.accounts.map((account) => account.request_order)).toEqual([0, 1, 2]);
+
+  for (let index = 0; index < 3; index += 1) {
+    const response = await api(ctx, "/v1/messages", {
+      apiKey: "gateway-key",
+      method: "POST",
+      body: JSON.stringify(messageBody(`ordered ${index}`)),
+    });
+    expect(response.status).toBe(200);
+  }
+  expect(ctx.sdk.agents.map((agent) => agent.input.apiKey)).toEqual(["cursor-b", "cursor-a", "cursor-c"]);
+
+  const invalid = await fetch(`${ctx.url}/v0/management/accounts/order`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ids: [first] }),
+  });
+  expect(invalid.status).toBe(422);
+});
+
 test("managed routing chooses an account whose live catalog contains the requested model", async () => {
   ctx = await startTestApp({
     config: { authMode: "managed", gatewayAccessKey: "gateway-key", managedCursorKey: undefined },

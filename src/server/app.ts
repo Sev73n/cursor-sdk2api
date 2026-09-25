@@ -9,7 +9,8 @@ import {
 } from "../auth/credentials.js";
 import { fetchCursorSandQuota } from "../account/cursor-dashboard.js";
 import { readAccount } from "../account/service.js";
-import { CursorAccountFileStore, type StoredCursorAccount } from "../account/file-store.js";
+import { AccountOrderError, CursorAccountFileStore, type StoredCursorAccount } from "../account/file-store.js";
+import { ModelBlocklist, ModelBlocklistError } from "../catalog/model-blocklist.js";
 import {
   DEFAULT_RUNTIME_PROFILE,
   resolveRequestProfile,
@@ -184,6 +185,7 @@ export function createApp(input: {
   });
   const catalog = new ModelCatalog(sdk, clock, config.catalogCacheMs);
   const accounts = new CursorAccountFileStore(config.stateDir, config.managedCursorKey);
+  const modelBlocklist = new ModelBlocklist(config.stateDir);
   const accountPool = new CursorAccountPool();
   const accountPayload = (apiKey: string, defaultProfile?: RuntimeProfile) =>
     readAccount(sdk, apiKey, {
@@ -196,6 +198,7 @@ export function createApp(input: {
     key_hint: account.keyHint,
     added_at: account.addedAt,
     default_profile: account.defaultProfile,
+    ...(account.requestOrder === undefined ? {} : { request_order: account.requestOrder }),
   });
 
   const boundCredentialFingerprint = (parsed: ParsedMessages, sessionHint?: string): string | undefined => {
@@ -435,6 +438,29 @@ export function createApp(input: {
         return;
       }
 
+      if (path === "/v0/management/models/blocklist" && method === "GET") {
+        sendJson(res, 200, { ids: modelBlocklist.list() }, requestId);
+        return;
+      }
+
+      if (path === "/v0/management/models/blocklist" && method === "PUT") {
+        const body = await readJsonBody(req, config.maxBodyBytes) as {
+          id?: unknown;
+          blocked?: unknown;
+        } | undefined;
+        const id = typeof body?.id === "string" ? body.id : "";
+        if (!id.trim()) throw invalidRequest("id is required");
+        if (typeof body?.blocked !== "boolean") throw invalidRequest("blocked must be a boolean");
+        try {
+          const ids = modelBlocklist.set(id, body.blocked);
+          sendJson(res, 200, { ids }, requestId);
+        } catch (error) {
+          if (error instanceof ModelBlocklistError) throw invalidRequest(error.message);
+          throw error;
+        }
+        return;
+      }
+
       if (path === "/v0/management/accounts/probe" && method === "GET") {
         const id = new URL(req.url ?? "/", "http://localhost").searchParams.get("id")?.trim() ?? "";
         if (!id) throw invalidRequest("id is required");
@@ -506,6 +532,22 @@ export function createApp(input: {
         throw invalidRequest("protocol must be messages, chat, or responses");
       }
 
+      if (path === "/v0/management/accounts/order" && method === "PUT") {
+        const body = await readJsonBody(req, config.maxBodyBytes) as { ids?: unknown } | undefined;
+        if (!Array.isArray(body?.ids) || body.ids.some((id) => typeof id !== "string")) {
+          throw invalidRequest("ids must be an array of account ids");
+        }
+        try {
+          const ordered = accounts.setOrder(body.ids);
+          accountPool.reset();
+          sendJson(res, 200, { accounts: ordered.map(publicAccount) }, requestId);
+        } catch (error) {
+          if (error instanceof AccountOrderError) throw invalidRequest(error.message);
+          throw error;
+        }
+        return;
+      }
+
       if (path === "/v0/management/accounts/default_profile" && method === "PUT") {
         const body = await readJsonBody(req, config.maxBodyBytes) as {
           id?: unknown;
@@ -573,12 +615,13 @@ export function createApp(input: {
         const listed = client.mode === "byok"
           ? await catalog.list(client.auth.cursorApiKey, client.auth.fingerprint)
           : await listManagedModels(accounts.list(), catalog);
+        const blockedIds = new Set(modelBlocklist.list());
         sendJson(
           res,
           listed.status === "unavailable" ? 200 : 200,
           {
             object: "list",
-            data: listed.models.map((model) => ({
+            data: listed.models.filter((model) => !blockedIds.has(model.id)).map((model) => ({
               id: model.id,
               object: "model",
               display_name: model.displayName,

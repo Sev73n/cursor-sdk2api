@@ -17,12 +17,30 @@ export interface HealthPayload {
   capabilities: Record<string, boolean | string>;
 }
 
+export interface ModelParameterValue {
+  value: string;
+  displayName?: string;
+}
+
+export interface ModelParameter {
+  id: string;
+  displayName?: string;
+  values?: ModelParameterValue[];
+}
+
+export interface ModelVariant {
+  displayName?: string;
+  description?: string;
+  isDefault?: boolean;
+  params?: Array<{ id: string; value: string }>;
+}
+
 export interface ModelPayload {
   id: string;
   display_name?: string;
   description?: string;
-  parameters?: unknown[];
-  variants?: unknown[];
+  parameters?: ModelParameter[];
+  variants?: ModelVariant[];
 }
 
 export interface ModelsPayload {

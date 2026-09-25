@@ -12,6 +12,7 @@ export function PlaygroundPage({
   activeId,
   protocol,
   selectedModel,
+  blockedIds,
   prompt,
   stream,
   output,
@@ -33,12 +34,14 @@ export function PlaygroundPage({
     events: string;
     emptyOutput: string;
     waiting: string;
+    noModels: string;
     accounts: string;
   };
   roster: RosterItem[];
   activeId: string;
   protocol: Protocol;
   selectedModel: string;
+  blockedIds: string[];
   prompt: string;
   stream: boolean;
   output: string;
@@ -51,7 +54,7 @@ export function PlaygroundPage({
   onRun: () => void;
 }) {
   const active = roster.find((item) => item.id === activeId);
-  const models = active?.models;
+  const models = active?.models?.data.filter((model) => !blockedIds.includes(model.id));
 
   return (
     <PageFrame title={t.title}>
@@ -101,8 +104,8 @@ export function PlaygroundPage({
         <label className="field page-field">
           <span>Model</span>
           <select value={selectedModel} onChange={(event) => onModel(event.target.value)}>
-            <option value="" disabled>{t.waiting}</option>
-            {models?.data.map((model) => (
+            <option value="" disabled>{roster.length === 0 ? t.waiting : t.noModels}</option>
+            {models?.map((model) => (
               <option key={model.id} value={model.id}>{model.display_name || model.id}</option>
             ))}
           </select>
