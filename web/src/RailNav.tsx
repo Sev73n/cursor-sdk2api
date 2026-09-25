@@ -10,12 +10,14 @@ export function RailNav({
   quota,
   accounts,
   models,
+  exportConfig,
   connect,
   playground,
   homeMeta,
   quotaMeta,
   accountsMeta,
   modelsMeta,
+  exportMeta,
   startMeta,
   playMeta,
   accountCount,
@@ -28,16 +30,18 @@ export function RailNav({
   quota: string;
   accounts: string;
   models: string;
+  exportConfig: string;
   connect: string;
   playground: string;
   homeMeta: string;
   quotaMeta: string;
   accountsMeta: string;
   modelsMeta: string;
+  exportMeta: string;
   startMeta: string;
   playMeta: string;
   accountCount: number;
-  icons: Record<"home" | "quota" | "key" | "models" | "start" | "play", ReactNode>;
+  icons: Record<"home" | "quota" | "key" | "models" | "export" | "start" | "play", ReactNode>;
 }) {
   const navRef = useRef<HTMLElement>(null);
   const [bar, setBar] = useState({ top: 0, height: 0, ready: false });
@@ -65,7 +69,7 @@ export function RailNav({
       observer.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [current, accountCount, home, quota, accounts, models, connect, playground]);
+  }, [current, accountCount, home, quota, accounts, models, exportConfig, connect, playground]);
 
   return (
     <nav ref={navRef} className="rail-nav" aria-label="cursor-sdk2api">
@@ -86,6 +90,7 @@ export function RailNav({
         <div role="group" aria-labelledby="nav-gateway">
           <a href={hrefFor("accounts")} title={accountsMeta} aria-current={current === "accounts" ? "page" : undefined}>{icons.key}{accounts}<small>{accountCount}</small></a>
           <a href={hrefFor("models")} title={modelsMeta} aria-current={current === "models" ? "page" : undefined}>{icons.models}{models}</a>
+          <a href={hrefFor("export")} title={exportMeta} aria-current={current === "export" ? "page" : undefined}>{icons.export}{exportConfig}</a>
           <a href={hrefFor("connect")} title={startMeta} aria-current={current === "connect" ? "page" : undefined}>{icons.start}{connect}</a>
           <a href={hrefFor("playground")} title={playMeta} aria-current={current === "playground" ? "page" : undefined}>{icons.play}{playground}</a>
         </div>

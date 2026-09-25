@@ -6,6 +6,7 @@ import { AccountDetailPage } from "./pages/AccountDetailPage";
 import { AccountsPage } from "./pages/AccountsPage";
 import { ConnectPage } from "./pages/ConnectPage";
 import type { RecipeName } from "./recipes";
+import { ExportPage } from "./pages/ExportPage";
 import { HomePage, type HomeCopy } from "./pages/HomePage";
 import { ModelsPage } from "./pages/ModelsPage";
 import { PlaygroundPage } from "./pages/PlaygroundPage";
@@ -31,12 +32,14 @@ const COPY = {
     navStart: "Quick start",
     navAccounts: "Accounts",
     navModels: "Models",
+    navExport: "Export",
     navQuota: "Quota",
     navPlay: "Playground",
     navHomeMeta: "Runtime and API URLs",
     navStartMeta: "Client recipes",
     navAccountsMeta: "Persistent credentials",
     navModelsMeta: "Catalog, parameters, block list",
+    navExportMeta: "Channel config from the live catalog",
     navQuotaMeta: "Cursor dashboard usage",
     navPlayMeta: "Messages / Chat / Responses",
     consoleTag: "Local console",
@@ -227,6 +230,25 @@ const COPY = {
       unavailable: "Catalog is unavailable.",
       missingFromCatalog: "Not in this account catalog",
     },
+    export: {
+      kicker: "Channel config",
+      title: "Export",
+      desc: "WorkBuddy config is generated from the current unblocked catalog, then checked in a second Auto session. Copy appears only after that check passes.",
+      origin: "Gateway",
+      generate: "Generate",
+      generating: "Generating",
+      verifying: "Checking",
+      copy: "Copy with key",
+      copyHint: "The page keeps the placeholder. Copy fills in the gateway key on this machine.",
+      passed: "Checked",
+      failed: "Check failed",
+      empty: "No unblocked models.",
+      accounts: "Go to accounts",
+      preview: "Will export",
+      blockedNote: "Blocked models are omitted.",
+      using: "Auto runs on",
+      noAccount: "Add an account first.",
+    },
     keyNeeded: "Paste a Cursor API key first.",
   },
   zh: {
@@ -239,12 +261,14 @@ const COPY = {
     navStart: "快速开始",
     navAccounts: "账号",
     navModels: "模型",
+    navExport: "导出",
     navQuota: "配额",
     navPlay: "协议试跑",
     navHomeMeta: "运行控制和 API 地址",
     navStartMeta: "客户端配方",
     navAccountsMeta: "持久化凭证",
     navModelsMeta: "目录、参数、屏蔽",
+    navExportMeta: "按当前目录导出渠道配置",
     navQuotaMeta: "官方限额",
     navPlayMeta: "Messages / Chat / Responses",
     consoleTag: "本机控制台",
@@ -434,6 +458,25 @@ const COPY = {
       stale: "目录已过期。",
       unavailable: "目录不可用。",
       missingFromCatalog: "不在这个账号的目录里",
+    },
+    export: {
+      kicker: "渠道配置",
+      title: "导出",
+      desc: "WorkBuddy 配置按当前未屏蔽目录生成，再用另一次 Auto 会话校验。通过后才能复制。",
+      origin: "网关地址",
+      generate: "生成配置",
+      generating: "正在生成",
+      verifying: "正在校验",
+      copy: "带上密钥复制",
+      copyHint: "页面仍显示占位符。复制时在本机换成网关密钥。",
+      passed: "校验通过",
+      failed: "校验未通过",
+      empty: "没有未屏蔽的模型。",
+      accounts: "去账号页",
+      preview: "将导出",
+      blockedNote: "已屏蔽的模型不会导出。",
+      using: "Auto 使用",
+      noAccount: "先加入账号。",
     },
     keyNeeded: "先粘贴一把 Cursor Key。",
   },
@@ -771,12 +814,14 @@ export function App() {
           quota={t.navQuota}
           accounts={t.navAccounts}
           models={t.navModels}
+          exportConfig={t.navExport}
           connect={t.navStart}
           playground={t.navPlay}
           homeMeta={t.navHomeMeta}
           quotaMeta={t.navQuotaMeta}
           accountsMeta={t.navAccountsMeta}
           modelsMeta={t.navModelsMeta}
+          exportMeta={t.navExportMeta}
           startMeta={t.navStartMeta}
           playMeta={t.navPlayMeta}
           accountCount={roster.length}
@@ -785,6 +830,7 @@ export function App() {
             quota: <NavIcon name="quota" />,
             key: <NavIcon name="key" />,
             models: <NavIcon name="models" />,
+            export: <NavIcon name="export" />,
             start: <NavIcon name="start" />,
             play: <NavIcon name="play" />,
           }}
@@ -870,6 +916,9 @@ export function App() {
             onBlock={(id, blocked) => void changeBlocked(id, blocked)}
           />
         ) : null}
+        {route.page === "export" ? (
+          <ExportPage t={t.export} roster={roster} onCopy={(value) => void copyValue("export", value)} />
+        ) : null}
         {route.page === "playground" ? (
           <PlaygroundPage
             t={t.play}
@@ -908,6 +957,7 @@ function pageLabelFor(page: Route["page"], t: (typeof COPY)["en"] | (typeof COPY
   if (page === "accounts" || page === "account") return t.navAccounts;
   if (page === "quota") return t.navQuota;
   if (page === "models") return t.navModels;
+  if (page === "export") return t.navExport;
   if (page === "playground") return t.navPlay;
   return t.navHome;
 }
@@ -916,7 +966,7 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
 }
 
-function NavIcon({ name }: { name: "home" | "quota" | "key" | "models" | "start" | "play" }) {
+function NavIcon({ name }: { name: "home" | "quota" | "key" | "models" | "export" | "start" | "play" }) {
   const d =
     name === "home"
       ? "M3 10.5 12 3l9 7.5V21H14V14H10v7H3Z"
@@ -926,6 +976,8 @@ function NavIcon({ name }: { name: "home" | "quota" | "key" | "models" | "start"
           ? "M8 14a5 5 0 1 1 4.9-6H21v3h-2v3h-3v2h-3.1A5 5 0 0 1 8 14Zm0-3a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"
           : name === "models"
             ? "M4 5h16v3H4Zm0 5.5h16v3H4ZM4 16h10v3H4Z"
+            : name === "export"
+              ? "M12 3v10l4-4 1.4 1.4L12 16.8 6.6 10.4 8 9l4 4V3ZM5 19h14v2H5Z"
           : name === "start"
             ? "M8 5v14l11-7Z"
             : "M4 5h10v4H8v6h6v4H4Zm12 3 5 4-5 4Z";

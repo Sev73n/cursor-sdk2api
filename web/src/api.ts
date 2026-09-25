@@ -73,6 +73,39 @@ export async function setManagedDefaultProfile(
   return body.account;
 }
 
+export async function getGatewayAccessKey(): Promise<string> {
+  const response = await fetch("/v0/management/gateway_access_key");
+  if (!response.ok) throw new Error(await errorMessage(response));
+  const body = (await response.json()) as { api_key?: unknown };
+  if (typeof body.api_key !== "string" || !body.api_key) throw new Error("Gateway access key is not configured");
+  return body.api_key;
+}
+
+export async function getManagedModels(): Promise<ModelsPayload> {
+  const response = await fetch("/v0/management/models");
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return (await response.json()) as ModelsPayload;
+}
+
+export async function runAutoPrompt(accountId: string, prompt: string): Promise<unknown> {
+  const response = await fetch("/v0/management/accounts/run", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      account_id: accountId,
+      protocol: "messages",
+      request: {
+        model: "default",
+        max_tokens: 8192,
+        stream: false,
+        messages: [{ role: "user", content: prompt }],
+      },
+    }),
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
 export async function setManagedAccountOrder(ids: string[]): Promise<void> {
   await managementJson<{ accounts: ManagementAccount[] }>({
     method: "PUT",

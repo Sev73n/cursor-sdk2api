@@ -763,7 +763,7 @@ html[lang="zh-CN"] .model-detail-head h2 { letter-spacing: 0; }
 }
 
 .page-field { grid-template-columns: 72px minmax(0, 1fr); max-width: 720px; margin-bottom: 14px; }
-.page-field select, .page-form textarea {
+.page-field select, .page-field input, .page-form textarea {
   width: 100%;
   min-height: 36px;
   padding: 6px 8px;

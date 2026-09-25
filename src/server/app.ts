@@ -112,6 +112,20 @@ async function listManagedModels(accounts: StoredCursorAccount[], catalog: Model
   };
 }
 
+function publicModelData(
+  models: Awaited<ReturnType<ModelCatalog["list"]>>["models"],
+  blockedIds: ReadonlySet<string>,
+) {
+  return models.filter((model) => !blockedIds.has(model.id)).map((model) => ({
+    id: model.id,
+    object: "model" as const,
+    display_name: model.displayName,
+    description: model.description,
+    parameters: model.parameters,
+    variants: model.variants,
+  }));
+}
+
 function managedPreSemanticFailureCanFailover(error: unknown): boolean {
   if (!(error instanceof GatewayError)) return true;
   if (
@@ -438,6 +452,28 @@ export function createApp(input: {
         return;
       }
 
+      if (path === "/v0/management/gateway_access_key" && method === "GET") {
+        if (!config.gatewayAccessKey) throw notFound("Gateway access key is not configured");
+        sendJson(res, 200, { api_key: config.gatewayAccessKey }, requestId);
+        return;
+      }
+
+      if (path === "/v0/management/models" && method === "GET") {
+        const listed = await listManagedModels(accounts.list(), catalog);
+        const blockedIds = new Set(modelBlocklist.list());
+        sendJson(res, 200, {
+          object: "list",
+          data: publicModelData(listed.models, blockedIds),
+          status: listed.status,
+          ...(listed.reason ? { reason: listed.reason } : {}),
+          cache: listed.stale
+            ? { stale: true, reason: listed.reason ?? "refresh_failed" }
+            : { stale: false },
+          account_pool_size: accounts.list().length,
+        }, requestId);
+        return;
+      }
+
       if (path === "/v0/management/models/blocklist" && method === "GET") {
         sendJson(res, 200, { ids: modelBlocklist.list() }, requestId);
         return;
@@ -621,14 +657,7 @@ export function createApp(input: {
           listed.status === "unavailable" ? 200 : 200,
           {
             object: "list",
-            data: listed.models.filter((model) => !blockedIds.has(model.id)).map((model) => ({
-              id: model.id,
-              object: "model",
-              display_name: model.displayName,
-              description: model.description,
-              parameters: model.parameters,
-              variants: model.variants,
-            })),
+            data: publicModelData(listed.models, blockedIds),
             status: listed.status,
             ...(listed.reason ? { reason: listed.reason } : {}),
             cache: listed.stale

@@ -68,6 +68,10 @@ test("operator blocklist is omitted from GET /v1/models and kept for probe and d
   expect(probeBody.models.data[0]?.parameters).toEqual([
     { id: "fast", displayName: "Fast", values: [{ value: "true" }, { value: "false" }] },
   ]);
+  const managed = (await (await fetch(`${ctx.url}/v0/management/models`)).json()) as {
+    data: Array<{ id: string }>;
+  };
+  expect(managed.data.map((model) => model.id)).toEqual(["grok-4.6"]);
 
   const called = await api(ctx, "/v1/messages", {
     method: "POST",
