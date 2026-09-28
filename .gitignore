@@ -9,4 +9,5 @@ coverage/
 tmp/
 _temp/
 .cursor-sdk2api/
+.state/
 *.tsbuildinfo
